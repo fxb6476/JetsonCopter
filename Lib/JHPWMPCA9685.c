@@ -1,5 +1,6 @@
 #include <JHPWMPCA9685.h>
 #include <math.h>
+#include <ncurses.h>
 
  PCA9685::PCA9685(int address) {
     kI2CBus = 1 ;           // Default I2C bus for Jetson TK1
@@ -58,7 +59,7 @@ void PCA9685::setPWMFrequency ( float frequency ) {
     // For debugging
     // printf("PCA9685 Prescale: 0x%02X\n",prescale) ;
     int oldMode = readByte(PCA9685_MODE1) ;
-     int newMode = ( oldMode & 0x7F ) | PCA9685_SLEEP ;
+    int newMode = ( oldMode & 0x7F ) | PCA9685_SLEEP ;
     writeByte(PCA9685_MODE1, newMode) ;
     writeByte(PCA9685_PRE_SCALE, prescale) ;
     writeByte(PCA9685_MODE1, oldMode) ;
@@ -83,6 +84,19 @@ void PCA9685::setAllPWM (int onValue, int offValue) {
     writeByte(PCA9685_ALL_LED_OFF_H, offValue >> 8) ;
 }
 
+void PCA9685::mass_fast_setPWM(int start_channel, int onValue, int offValues[], int value_size){
+    const unsigned char data[] = {onValue & 0xFF, onValue >> 8, offValues[0] & 0xFF, offValues[0] >> 8,
+                         onValue & 0xFF, onValue >> 8, offValues[1] & 0xFF, offValues[1] >> 8,
+                         onValue & 0xFF, onValue >> 8, offValues[2] & 0xFF, offValues[2] >> 8,
+                         onValue & 0xFF, onValue >> 8, offValues[3] & 0xFF, offValues[3] >> 8};
+    autoWriteBytes(PCA9685_LED0_ON_L+4*start_channel, 16, data);
+}
+
+void PCA9685::fast_setPWM(int channel, int onValue, int offValue){
+    const unsigned char data[] = {onValue & 0xFF, onValue >> 8, offValue & 0xFF, offValue >> 8};
+    autoWriteBytes(PCA9685_LED0_ON_L+4*channel, 4, data);
+    printw("Put data in motor 1 %d, %d, %d, %d\n", data[0], data[1], data[2], data[3]);
+}
 
 // Read the given register
 int PCA9685::readByte(int readRegister)
@@ -95,6 +109,16 @@ int PCA9685::readByte(int readRegister)
     }
     // For debugging
     // printf("Device 0x%02X returned 0x%02X from register 0x%02X\n", kI2CAddress, toReturn, readRegister);
+    return toReturn ;
+}
+
+int PCA9685::autoWriteBytes(int writeRegister, int Array_size, const unsigned char byteArray[]){
+    int toReturn = i2c_smbus_write_i2c_block_data(kI2CFileDescriptor, writeRegister, Array_size, byteArray);
+    if (toReturn < 0) {
+        printf("PCA9685 Write Byte Array error: %d",errno) ;
+        error = errno ;
+        toReturn = -1 ;
+    }
     return toReturn ;
 }
 

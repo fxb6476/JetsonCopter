@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <linux/i2c-dev2.h>
+#include "Lib/mod-i2c-dev2.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <curses.h>

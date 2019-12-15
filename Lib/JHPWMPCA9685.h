@@ -26,7 +26,7 @@ SOFTWARE.
 #define _JHPWMPCA9685_H
 
 #include <cstddef>
-#include <linux/i2c-dev2.h>
+#include "Lib/mod-i2c-dev2.h"
 #include <sys/ioctl.h>
 #include <cstdlib>
 #include <cstdio>
@@ -56,6 +56,12 @@ public:
     // Channels are in sets of 4 bytes
     void setPWM ( int channel, int onValue, int offValue);
 
+    // Write data very fast.
+    void fast_setPWM(int channel, int onValue, int offValue);
+
+    // Writes all motors using auto increment method.
+    void mass_fast_setPWM(int start_channel, int onValue, int offValues[], int value_size);
+
     void setAllPWM (int onValue, int offValue);
 
     // Read the given register
@@ -63,6 +69,9 @@ public:
 
     // Write the the given value to the given register
     int writeByte(int writeRegister, int writeValue);
+
+    // Write block of data using auto increment feature.
+    int autoWriteBytes(int writeRegister, int Array_size, const unsigned char byteArray[]);
 
     int getError() ;
 
@@ -165,7 +174,7 @@ public:
 #define PCA9685_PRE_SCALE        0xFE
 
 // Register Bits
-#define PCA9685_ALLCALL          0x01
+#define PCA9685_ALLCALL          0x21
 #define PCA9685_OUTDRV           0x04
 #define PCA9685_RESTART          0x80
 #define PCA9685_SLEEP            0x10

@@ -27,9 +27,10 @@ using namespace std;
 int THROTTLE_OFF = 1638;
 int THROTTLE_MEDIUM = 2457;
 int THROTTLE_FULL = 3276;
-int HOOVER = 2215;
+int HOOVER = 2210; //2195
 
-int rate = 12000;
+// Loop time in Micro-Seconds. ~ 12 milli seconds.
+int rate = 10000;
 
 // The ESC is plugged into the following PWM channel
 int ESC_FL = 0;
@@ -41,16 +42,19 @@ int ESC_BR = 3;
 float PITCH = 0;
 float ROLL = 0;
 float YAW = 0;
+float angle_yaw = 0;
 
-// Pitch - PID, Roll - PID, Yaw - PD
-float pitch_gains[3] = {1.0, 0.0, 50.0};
-float roll_gains[3] =  {1.0, 0.0, 50.0};
-float yaw_gains[2] =   {1.0, .01};
+// Pitch - PID 
+// Roll  - PID
+// Yaw   - PI
+float pitch_gains[3] = {1.2, 0.01, 42.0};
+float roll_gains[3] =  {1.2, 0.01, 42.0};
+float yaw_gains[3] =   {24, 0.08, 0.0};
 
 // Variables for controller.
 float delta_t = 0.0;
 float old_error[3] =   {0.0, 0.0, 0.0};
-float total_error[2] = {0.0, 0.0};
+float total_error[3] = {0.0, 0.0, 0.0};
 float new_err[3];
 int adjustments[3] = {0,0,0};
 int new_speeds[4] = {0, 0, 0, 0};
@@ -80,6 +84,7 @@ int main() {
     //  where <directory path> is the path to where the .ini file is to be loaded/saved
     initscr();
     nodelay(stdscr, true);
+    scrollok(stdscr, true);
     noecho();
     //raw();
 
@@ -149,9 +154,61 @@ int main() {
             if (input == 'B'){
                 HOOVER--;
             }
-        }else if(input == 'e'){
-            break;
-        }
+        }else if(input == 'q'){ // ++ 'P' Gains --- PITCH AND ROLL
+
+	    pitch_gains[0] += 1;
+	    roll_gains[0] += 1;
+
+	}else if(input == 'w'){ // ++ 'I' Gains
+
+            pitch_gains[1] += .1;
+	    roll_gains[1] += .1;
+
+	}else if(input == 'e'){ // ++ 'D' Gains
+
+            pitch_gains[2] += 5;
+	    roll_gains[2] += 5;
+
+	}else if(input == 'a'){ // -- 'P' Gains
+
+            pitch_gains[0] -= 1;
+	    roll_gains[0] -= 1;
+
+	}else if(input == 's'){ // -- 'I' Gains
+
+            pitch_gains[1] -= .1;
+	    roll_gains[1] -= .1;
+
+        }else if(input == 'd'){ // -- 'D' Gains
+
+            pitch_gains[2] += 5;
+	    roll_gains[2] += 5;
+
+	}else if(input == 'z'){ // ++ 'P' Gain --- YAW
+
+            yaw_gains[0] += 1;
+
+	}else if(input == 'x'){ // ++ 'I' Gain
+
+	    yaw_gains[1] += .1;
+            
+	}else if(input == 'c'){ // -- 'P' Gain
+
+            yaw_gains[0] -= 1;
+            
+	}else if(input == 'v'){ // -- 'I' Gain
+
+	    yaw_gains[1] -= .1;
+            
+	}
+
+	// Reading the BN0. With Gyro
+	struct bnogyr bnod1;
+	res = get_gyr(&bnod1);
+	if (res != 0){
+	    printw("Error: Could not read Gyro angles data .\n");
+	    break;
+	}
 
         // Reading the BNO.
         struct bnoeul bnod;
@@ -161,18 +218,28 @@ int main() {
             break;
         }
 
+        angle_yaw += bnod1.gdata_y*.012;
         // Controller code.
         angles[0] = bnod.eul_pitc;
         angles[1] = bnod.eul_roll;
-        angles[2] = bnod.eul_head;
+        angles[2] = angle_yaw;
+	//printw("Gyro yaw %f\n", angles[2]);
+
         new_err[0] = PITCH - angles[0];
         new_err[1] = ROLL - angles[1];
         new_err[2] = YAW - angles[2];
+	
+	// Calculating Integral
         total_error[0] += pitch_gains[1] * new_err[0];
         total_error[1] += roll_gains[1] * new_err[1];
+	total_error[2] += yaw_gains[1] * new_err[2];
+
+        // Actual PID Calculations
+	// ----------------------------------------------------------------------------------------------------------
+	//                          Proportional              Integral                 Derivative
         adjustments[0] = (int)(pitch_gains[0]*new_err[0] + total_error[0] + pitch_gains[2]*(new_err[0]-old_error[0]) );
-        adjustments[1] = (int)(roll_gains[0]*new_err[1] + total_error[1] + roll_gains[2]*(new_err[1]-old_error[1]) );
-        adjustments[2] = (int)(yaw_gains[0]*new_err[2] + yaw_gains[1]*((new_err[2]-old_error[2])/delta_t) );
+        adjustments[1] = (int)(roll_gains[0]*new_err[1]  + total_error[1] + roll_gains[2]*(new_err[1]-old_error[1]) );
+        adjustments[2] = (int)(yaw_gains[0]*new_err[2]   + total_error[2]);
 
         // Update errors such that old becomes new.
         old_error[0] = new_err[0];
@@ -181,11 +248,14 @@ int main() {
 
         // Keeping Yaw out of this for now lol. It is because yaw works with a magnometer
         // which will most likely require calibration after flying for a few seconds.
-        new_speeds[0] = HOOVER + adjustments[0] + adjustments[1];
-        new_speeds[1] = HOOVER + adjustments[0] - adjustments[1];
-        new_speeds[2] = HOOVER - adjustments[0] + adjustments[1];
-        new_speeds[3] = HOOVER - adjustments[0] - adjustments[1];
+        // ----------------------------------------------------------------------------
+        //                         PITCH             ROLL             YAW
+        new_speeds[0] = HOOVER + adjustments[0] + adjustments[1] + adjustments[2];
+        new_speeds[1] = HOOVER + adjustments[0] - adjustments[1] - adjustments[2];
+        new_speeds[2] = HOOVER - adjustments[0] + adjustments[1] - adjustments[2];
+        new_speeds[3] = HOOVER - adjustments[0] - adjustments[1] + adjustments[2];
 
+	// Limiting output between min and max throttle.
         (new_speeds[0] < THROTTLE_OFF) ?  (new_speeds[0] = THROTTLE_OFF) : new_speeds[0];
         (new_speeds[0] > THROTTLE_FULL) ? (new_speeds[0] = THROTTLE_FULL): new_speeds[0];
         (new_speeds[1] < THROTTLE_OFF) ?  (new_speeds[1] = THROTTLE_OFF) : new_speeds[1];
@@ -197,27 +267,40 @@ int main() {
 
         //printw("Values %d, %d, %d, %d\n", new_speeds[0], new_speeds[1], new_speeds[2], new_speeds[3]);
 
-    	pca9685->setPWM(ESC_FL,0,new_speeds[0]);
-    	pca9685->setPWM(ESC_FR,0,new_speeds[1]);
-    	pca9685->setPWM(ESC_BL,0,new_speeds[2]);
-    	pca9685->setPWM(ESC_BR,0,new_speeds[3]);
+	// Applying new speeds to motors.
 
+        //pca9685->setPWM(ESC_FL,0,new_speeds[0]);
+        //pca9685->setPWM(ESC_FR,0,new_speeds[1]);
+        //pca9685->setPWM(ESC_BL,0,new_speeds[2]);
+        //pca9685->setPWM(ESC_BR,0,new_speeds[3]);
+
+        pca9685->mass_fast_setPWM(ESC_FL, 0, new_speeds, 4);
+	//int dat[] = {0,0,0,0};
+        //dat[0] = pca9685->readByte(PCA9685_LED0_ON_L);
+        //dat[1] = pca9685->readByte(PCA9685_LED0_ON_H);
+        //dat[2] = pca9685->readByte(PCA9685_LED0_OFF_L);
+        //dat[3] = pca9685->readByte(PCA9685_LED0_OFF_H);
+
+	//printw("Actual data in motor 1 %d, %d, %d, %d\n", dat[0], dat[1], dat[2], dat[3]);
+
+	// Waiting if we still have time in this cycle.
+	// If we went over, don't delay, just keep going.
+	// Mostly only go over by a couple hundred micro seconds.
         auto end = chrono::steady_clock::now();
         int elapsed = chrono::duration_cast<chrono::microseconds>(end - start).count();
         //printw("Elapsed Time micro-seconds: %d\n", elapsed);
         if ((rate - elapsed) < 0) {
-            //printw("Oops! Something took to long.\n");
+            printw("Oops! Something took to long.\n");
             continue;
         }
-        usleep(rate - elapsed);
+        //usleep(rate - elapsed);
         refresh();
         //auto end2 = chrono::steady_clock::now();
         //elapsed = chrono::duration_cast<chrono::microseconds>(end2 - start).count();
         //printw("Elapsed: %d\n", elapsed);
     }
 
-    // Clean up all objects previously initialized.
-
+    // Delete up all objects.
     printw("Cleaning up system. Time to turn off...\n");
 
     pca9685->setPWM(ESC_FL,0,THROTTLE_OFF);
@@ -232,4 +315,9 @@ int main() {
     refresh();
     sleep(3);
     endwin();
+    
+    // Persistent prints.
+    printf("Pitch Gains: %f, %f, %f\n", pitch_gains[0], pitch_gains[1], pitch_gains[2]);
+    printf("Roll Gains: %f, %f, %f\n",  roll_gains[0],  roll_gains[1],  roll_gains[2]);
+    printf("Yaw Gains: %f, %f, %f\n",   yaw_gains[0],   yaw_gains[1],   yaw_gains[2]);
 }
