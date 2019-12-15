@@ -1,7 +1,15 @@
 # JetsonCopter
-PID Controller for quadcopter, powered by Nvidia Jetson Nano
+Flight controller firmware for quadcopter powered by Nvidia Jetson Nano, BNO055 IMU, and PCA9685 PWM Controller.
+  - PID Algorithm -> Pitch and Roll
+  - PI Algorithm -> Yaw
+  
+### Motor Layout
+|Location|PCA9685 Channel||Location|PCA9685 Channel|
+| --- | --- | --- | --- | --- |
+| Front Left | 0 || Front Right | 1 |
+| Back Left | 2 || Back Right | 3 |
 
-# To start program.
+# Lift Off!
 1. Execute ``` make ``` in root of this repo.
 2. Navigate to output and execute ```./Hermies```
 
