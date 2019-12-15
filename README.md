@@ -36,3 +36,8 @@ Flight controller firmware for quadcopter powered by Nvidia Jetson Nano, BNO055 
 | --- | --- | --- | --- | --- |
 | z | ++ 'P' gain by 1.0 point. | * | c | -- 'P' gain by 1.0 point. |
 | x | ++ 'I' gain by 0.1 point. | * | v | -- 'I' gain by 0.1 point. |
+
+# To-Do List
+[ ] Create motor controller class based on bit-banging GPIO. Should make changing motor speed way faster!
+[ ] Add new bit-banged motor controller code into main flight controller.
+[ ] Assess new speed of overall control law. I want a single cycle to take < 4ms
